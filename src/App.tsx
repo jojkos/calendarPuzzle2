@@ -54,17 +54,27 @@ function App() {
             await solver.solveAsync((boardState) => {
                 // Deep copy to trigger re-render
                 setVisualBoard(boardState.map(row => [...row]));
-            }, 50); // 50ms delay per step
+            }, 50, 1); 
             
-            // Check if we found a solution
-            // The solver updates visualBoard. 
-            // If finished, we can check if it has solutions internally but solveAsync returns boolean
-            if (solver.getSolutions().length > 0) {
-                 setSolutions(solver.getSolutions());
-                 setVisualBoard(null); // Switch to standard view
+            // The visual solver stops after 1. To show ALL solutions to the user
+            // without making them wait 20mins, we now run a sync solve in the background
+            // to get the rest instantaneously.
+            if (solverRef.current) { // Check if not stopped
+                 const fullSolver = new Solver(puzzleType, month, day, weekday);
+                 fullSolver.solve(); // Finds all 24+ quickly (millis)
+                 const found = fullSolver.getSolutions();
+                 
+                 if (found.length > 0) {
+                      setSolutions(found);
+                      setVisualBoard(null);
+                      // Visual solver found the first one, fullSolver found all (ordered).
+                      // Index 0 matches the one just shown.
+                      setCurrentSolutionIndex(0);
+                 }
             }
         } else {
             // Standard mode
+            solver.solve(); // Explicit execution
             const found = solver.getSolutions();
             setSolutions(found);
             setCurrentSolutionIndex(0);
@@ -96,20 +106,22 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-100 flex flex-col items-center justify-center p-4 font-sans text-stone-800">
+    <div className="min-h-screen bg-stone-100 flex flex-col items-center justify-center p-2 font-sans text-stone-800">
       
-      <div className="w-full max-w-lg flex flex-col gap-4">
+      <div className="w-full max-w-lg flex flex-col gap-2">
         
-        {/* Header */}
-        <div className="flex items-baseline justify-between px-1">
-            <h1 className="text-2xl font-black tracking-tight text-stone-900">Calendar<span className="text-blue-600">Solver</span></h1>
+        {/* Header & Selector merged */}
+        <div className="flex flex-row items-center justify-between gap-2 bg-white p-2 px-3 rounded-xl shadow-sm border border-stone-200">
+             <h1 className="text-xl font-black tracking-tight text-stone-900 whitespace-nowrap mr-2">
+                Calendar<span className="text-blue-600">Solver</span>
+             </h1>
+             <PuzzleSelector 
+                type={puzzleType}
+                onChange={setPuzzleType}
+                disabled={isSolving}
+                compact={true} // We will add this prop or just style it via className in PuzzleSelector if needed, but for now we arrange it here.
+            />
         </div>
-
-        <PuzzleSelector 
-            type={puzzleType}
-            onChange={setPuzzleType}
-            disabled={isSolving}
-        />
 
         <Controls 
             onSolve={handleSolve}
@@ -122,12 +134,12 @@ function App() {
         
         {/* Solution Navigation */}
         {solutions.length > 0 && !isSolving && (
-            <div className="w-full bg-white p-2 px-4 rounded-xl shadow-sm border border-stone-200 flex items-center justify-between">
-                <button onClick={prevSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600">← Prev</button>
+            <div className="w-full bg-white p-1.5 px-3 rounded-xl shadow-sm border border-stone-200 flex items-center justify-between">
+                <button onClick={prevSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600 text-sm">← Prev</button>
                 <span className="font-mono font-bold text-sm text-stone-700">
                     {currentSolutionIndex + 1} / {solutions.length}
                 </span>
-                <button onClick={nextSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600">Next →</button>
+                <button onClick={nextSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600 text-sm">Next →</button>
             </div>
         )}
 

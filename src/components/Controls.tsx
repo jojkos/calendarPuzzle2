@@ -12,35 +12,46 @@ interface ControlsProps {
 
 export const Controls: React.FC<ControlsProps> = ({ onSolve, onStop, solving, solutionCount, visualize, setVisualize }) => {
   return (
-    <div className="flex flex-row items-center justify-between w-full gap-4 bg-white p-3 rounded-xl shadow-sm border border-stone-200">
-      <div className="flex flex-col sm:flex-row items-center gap-4">
-        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-stone-500 hover:text-stone-800 transition-colors">
+    <div className="flex flex-col gap-3 w-full bg-white p-4 rounded-xl shadow-sm border border-stone-200">
+      
+      <button
+        onClick={solving ? onStop : onSolve}
+        className={`w-full py-4 rounded-lg text-lg font-bold shadow-lg transition-all active:scale-[0.98] 
+         ${solving 
+            ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' 
+            : 'bg-stone-900 hover:bg-black text-white shadow-stone-900/20'
+         }
+        `}
+      >
+        {solving ? 'Zastavit' : 'Vyřešit Hlavolam'}
+      </button>
+
+      <div className="flex items-center justify-between px-1">
+          <label className="flex items-center gap-2 cursor-pointer select-none group">
+            <div className={`w-3 h-3 rounded border border-stone-300 transition-colors flex items-center justify-center
+                ${visualize ? 'bg-blue-600 border-blue-600' : 'bg-white group-hover:border-stone-400'}
+            `}>
+                {visualize && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+            </div>
             <input 
               type="checkbox" 
               checked={visualize} 
               disabled={solving}
               onChange={(e) => setVisualize(e.target.checked)}
-              className="w-4 h-4 rounded border-stone-300 text-blue-600 focus:ring-blue-500"
+              className="hidden"
             />
-            <span>Zobrazovat průběh skládání</span>
-        </label>
-      </div>
+            <span className="text-xs text-stone-400 font-medium group-hover:text-stone-600 transition-colors">
+                Zobrazit průběh řešení
+            </span>
+          </label>
 
-      <div className="flex items-center gap-4">
-          <div className="text-xs text-stone-500 font-medium whitespace-nowrap hidden sm:block">
-              {solutionCount > 0 ? `${solutionCount} Found` : ''}
+          <div className="text-xs text-stone-500 font-medium">
+              {solutionCount > 0 && (
+                  <span className="bg-stone-100 px-2 py-1 rounded-md text-stone-600">
+                      Nalezeno: {solutionCount}
+                  </span>
+              )}
           </div>
-          <button
-            onClick={solving ? onStop : onSolve}
-            className={`px-8 py-2.5 rounded-lg text-sm font-bold shadow-lg transition-all active:scale-95 min-w-[120px]
-             ${solving 
-                ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' 
-                : 'bg-stone-900 hover:bg-black text-white'
-             }
-            `}
-          >
-            {solving ? 'STOP' : 'Vyřešit'}
-          </button>
       </div>
     </div>
   );

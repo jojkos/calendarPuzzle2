@@ -144,7 +144,12 @@ export class Solver {
 
 
   // piecesAvailable: Set of indices
-  public solveFlexible(piecesAvailable: Set<number>, limit: number = 1000): void {
+  public solve(limit: number = 1000): void {
+      const allPieces = new Set(this.pieces.map(p => p.id));
+      this.solveFlexible(allPieces, limit);
+  }
+
+  private solveFlexible(piecesAvailable: Set<number>, limit: number): void {
       if (this.stopped) return;
       if(this.solutions.length >= limit) return;
 
@@ -169,17 +174,13 @@ export class Solver {
               const H = shape.length;
               const W = shape[0].length;
               
-              // For the piece to cover (r,c), it must be placed at (r - ir, c - ic)
-              // for some (ir, ic) where shape[ir][ic] == 1.
-              // Try all such anchor points.
               for (let ir = 0; ir < H; ir++) {
                   for (let ic = 0; ic < W; ic++) {
                       if (shape[ir][ic] === 1) {
                           const originR = r - ir;
                           const originC = c - ic;
                           
-                          // Check boundaries for origin (implicit in canPlace but good to check early)
-                          if (originR < 0 || originC < 0) continue; // Basic optimization, but canPlace handles it.
+                          if (originR < 0 || originC < 0) continue;
 
                           if (this.canPlace(shape, originR, originC)) {
                               this.place(shape, originR, originC, piece.id + 1);
@@ -205,20 +206,20 @@ export class Solver {
       return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // Async solver with callback
   public async solveAsync(
       onUpdate: (board: number[][]) => void, 
-      delayMs: number = 20
-  ): Promise<boolean> {
+      delayMs: number = 20,
+      limit: number = 1000
+  ): Promise<void> {
       const allPieces = new Set(this.pieces.map(p => p.id));
-      return this.solveFlexibleAsync(allPieces, onUpdate, delayMs);
+      await this.solveFlexibleAsync(allPieces, onUpdate, delayMs, limit);
   }
 
-  public async solveFlexibleAsync(
+  private async solveFlexibleAsync(
       piecesAvailable: Set<number>, 
       onUpdate: (board: number[][]) => void,
       delayMs: number,
-      limit: number = 1
+      limit: number
   ): Promise<boolean> {
       if (this.stopped) return false;
       if(this.solutions.length >= limit) return true;
@@ -227,7 +228,8 @@ export class Solver {
       if (!spot) {
           this.solutions.push(this.board.map(row => [...row]));
           onUpdate(this.board);
-          return true; // Found a solution
+          await this.delay(delayMs * 10); // Pause briefly on solution
+          return false; // Return false to continue searching for more solutions
       }
       
       const {r, c} = spot;
@@ -274,8 +276,6 @@ export class Solver {
   }
 
   public getSolutions(): Solution[] {
-      const allPieces = new Set(this.pieces.map(p => p.id));
-      this.solveFlexible(allPieces);
       return this.solutions;
   }
 }
