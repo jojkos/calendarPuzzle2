@@ -54,7 +54,7 @@ export const Board: React.FC<BoardProps> = ({
     }
 
     // Determine piece
-    const pieceId = solution ? solution[r][c] : 0;
+    const pieceId = solution?.[r]?.[c] ?? 0;
     
     // Logic:
     // If solution exists:
