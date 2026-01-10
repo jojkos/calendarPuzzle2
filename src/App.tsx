@@ -6,159 +6,159 @@ import { Solver, Solution } from './solver/solver';
 import { PuzzleType } from './solver/types';
 
 function App() {
-  const [month, setMonth] = useState<number>(new Date().getMonth());
-  const [day, setDay] = useState<number>(new Date().getDate());
-  const [weekday, setWeekday] = useState<number>((new Date().getDay() + 6) % 7); // 0=Mon, 6=Sun (Standard JS is 0=Sun)
-  
-  const [puzzleType, setPuzzleType] = useState<PuzzleType>(PuzzleType.DOUBLE);
+    const [month, setMonth] = useState<number>(new Date().getMonth());
+    const [day, setDay] = useState<number>(new Date().getDate());
+    const [weekday, setWeekday] = useState<number>((new Date().getDay() + 6) % 7); // 0=Mon, 6=Sun (Standard JS is 0=Sun)
 
-  const [solutions, setSolutions] = useState<Solution[]>([]);
-  const [currentSolutionIndex, setCurrentSolutionIndex] = useState<number>(0);
-  const [isSolving, setIsSolving] = useState(false);
+    const [puzzleType, setPuzzleType] = useState<PuzzleType>(PuzzleType.DOUBLE);
 
-  const [visualize, setVisualize] = useState(false);
-  const [visualBoard, setVisualBoard] = useState<number[][] | null>(null);
+    const [solutions, setSolutions] = useState<Solution[]>([]);
+    const [currentSolutionIndex, setCurrentSolutionIndex] = useState<number>(0);
+    const [isSolving, setIsSolving] = useState(false);
 
-  const solverRef = useRef<Solver | null>(null);
+    const [visualize, setVisualize] = useState(false);
+    const [visualBoard, setVisualBoard] = useState<number[][] | null>(null);
 
-  useEffect(() => {
-    // Reset solutions when config changes
-    setSolutions([]);
-    setCurrentSolutionIndex(0);
-    setVisualBoard(null);
-  }, [month, day, weekday, puzzleType]);
+    const solverRef = useRef<Solver | null>(null);
 
-  const handleStop = () => {
-      if (solverRef.current) {
-          solverRef.current.stop();
-      }
-      setIsSolving(false);
-  };
+    useEffect(() => {
+        // Reset solutions when config changes
+        setSolutions([]);
+        setCurrentSolutionIndex(0);
+        setVisualBoard(null);
+    }, [month, day, weekday, puzzleType]);
 
-  const handleSolve = async () => {
-    if (isSolving) return;
-
-    setIsSolving(true);
-    setSolutions([]);
-    setVisualBoard(null);
-
-    // Give UI a moment
-    await new Promise(r => setTimeout(r, 50));
-    
-    try {
-        const solver = new Solver(puzzleType, month, day, weekday);
-        solverRef.current = solver;
-
-        if (visualize) {
-            // Visualize mode: Find ONE solution with animation
-            await solver.solveAsync((boardState) => {
-                // Deep copy to trigger re-render
-                setVisualBoard(boardState.map(row => [...row]));
-            }, 50, 1); 
-            
-            // The visual solver stops after 1. To show ALL solutions to the user
-            // without making them wait 20mins, we now run a sync solve in the background
-            // to get the rest instantaneously.
-            if (solverRef.current) { // Check if not stopped
-                 const fullSolver = new Solver(puzzleType, month, day, weekday);
-                 fullSolver.solve(); // Finds all 24+ quickly (millis)
-                 const found = fullSolver.getSolutions();
-                 
-                 if (found.length > 0) {
-                      setSolutions(found);
-                      setVisualBoard(null);
-                      // Visual solver found the first one, fullSolver found all (ordered).
-                      // Index 0 matches the one just shown.
-                      setCurrentSolutionIndex(0);
-                 }
-            }
-        } else {
-            // Standard mode
-            solver.solve(); // Explicit execution
-            const found = solver.getSolutions();
-            setSolutions(found);
-            setCurrentSolutionIndex(0);
+    const handleStop = () => {
+        if (solverRef.current) {
+            solverRef.current.stop();
         }
-        
-    } catch (e) {
-        console.error(e);
-    } finally {
         setIsSolving(false);
-        solverRef.current = null;
-    }
-  };
+    };
 
-  const nextSolution = () => {
-      setCurrentSolutionIndex(prev => (prev + 1) % solutions.length);
-  };
-  
-  const prevSolution = () => {
-      setCurrentSolutionIndex(prev => (prev - 1 + solutions.length) % solutions.length);
-  };
+    const handleSolve = async () => {
+        if (isSolving) return;
 
-  const currentSolution = solutions.length > 0 ? solutions[currentSolutionIndex] : null;
+        setIsSolving(true);
+        setSolutions([]);
+        setVisualBoard(null);
 
-  const handleCellClick = (m: number | null, d: number | null, w: number | null) => {
-      if (isSolving) return;
-      if (m !== null) setMonth(m);
-      if (d !== null) setDay(d);
-      if (w !== null) setWeekday(w);
-  };
+        // Give UI a moment
+        await new Promise(r => setTimeout(r, 50));
 
-  return (
-    <div className="min-h-screen bg-stone-100 flex flex-col items-center justify-center p-2 font-sans text-stone-800">
-      
-      <div className="w-full max-w-lg flex flex-col gap-2">
-        
-        {/* Header & Selector merged */}
-        <div className="flex flex-row items-center justify-between gap-2 bg-white p-2 px-3 rounded-xl shadow-sm border border-stone-200">
-             <h1 className="text-xl font-black tracking-tight text-stone-900 whitespace-nowrap mr-2">
-                Calendar<span className="text-blue-600">Solver</span>
-             </h1>
-             <PuzzleSelector 
-                type={puzzleType}
-                onChange={setPuzzleType}
-                disabled={isSolving}
-                compact={true} // We will add this prop or just style it via className in PuzzleSelector if needed, but for now we arrange it here.
-            />
-        </div>
+        try {
+            const solver = new Solver(puzzleType, month, day, weekday);
+            solverRef.current = solver;
 
-        <Controls 
-            onSolve={handleSolve}
-            onStop={handleStop}
-            solving={isSolving}
-            solutionCount={solutions.length}
-            visualize={visualize}
-            setVisualize={setVisualize}
-        />
-        
-        {/* Solution Navigation */}
-        {solutions.length > 0 && !isSolving && (
-            <div className="w-full bg-white p-1.5 px-3 rounded-xl shadow-sm border border-stone-200 flex items-center justify-between">
-                <button onClick={prevSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600 text-sm">← Prev</button>
-                <span className="font-mono font-bold text-sm text-stone-700">
-                    {currentSolutionIndex + 1} / {solutions.length}
-                </span>
-                <button onClick={nextSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600 text-sm">Next →</button>
+            if (visualize) {
+                // Visualize mode: Find ONE solution with animation
+                await solver.solveAsync((boardState) => {
+                    // Deep copy to trigger re-render
+                    setVisualBoard(boardState.map(row => [...row]));
+                }, 50, 1);
+
+                // The visual solver stops after 1. To show ALL solutions to the user
+                // without making them wait 20mins, we now run a sync solve in the background
+                // to get the rest instantaneously.
+                if (solverRef.current) { // Check if not stopped
+                    const fullSolver = new Solver(puzzleType, month, day, weekday);
+                    fullSolver.solve(); // Finds all 24+ quickly (millis)
+                    const found = fullSolver.getSolutions();
+
+                    if (found.length > 0) {
+                        setSolutions(found);
+                        setVisualBoard(null);
+                        // Visual solver found the first one, fullSolver found all (ordered).
+                        // Index 0 matches the one just shown.
+                        setCurrentSolutionIndex(0);
+                    }
+                }
+            } else {
+                // Standard mode
+                solver.solve(); // Explicit execution
+                const found = solver.getSolutions();
+                setSolutions(found);
+                setCurrentSolutionIndex(0);
+            }
+
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsSolving(false);
+            solverRef.current = null;
+        }
+    };
+
+    const nextSolution = () => {
+        setCurrentSolutionIndex(prev => (prev + 1) % solutions.length);
+    };
+
+    const prevSolution = () => {
+        setCurrentSolutionIndex(prev => (prev - 1 + solutions.length) % solutions.length);
+    };
+
+    const currentSolution = solutions.length > 0 ? solutions[currentSolutionIndex] : null;
+
+    const handleCellClick = (m: number | null, d: number | null, w: number | null) => {
+        if (isSolving) return;
+        if (m !== null) setMonth(m);
+        if (d !== null) setDay(d);
+        if (w !== null) setWeekday(w);
+    };
+
+    return (
+        <div className="min-h-screen bg-stone-100 flex flex-col items-center justify-center p-2 font-sans text-stone-800">
+
+            <div className="w-full max-w-lg flex flex-col gap-2">
+
+                {/* Header & Selector merged */}
+                <div className="flex flex-row items-center justify-between gap-2 bg-white p-2 px-3 rounded-xl shadow-sm border border-stone-200">
+                    <h1 className="text-xl font-black tracking-tight text-stone-900 whitespace-nowrap mr-2">
+                        Calendar<span className="text-blue-600">Solver</span>
+                    </h1>
+                    <PuzzleSelector
+                        type={puzzleType}
+                        onChange={setPuzzleType}
+                        disabled={isSolving}
+                        compact={true} // We will add this prop or just style it via className in PuzzleSelector if needed, but for now we arrange it here.
+                    />
+                </div>
+
+                <Controls
+                    onSolve={handleSolve}
+                    onStop={handleStop}
+                    solving={isSolving}
+                    solutionCount={solutions.length}
+                    visualize={visualize}
+                    setVisualize={setVisualize}
+                />
+
+                {/* Solution Navigation */}
+                {solutions.length > 0 && !isSolving && (
+                    <div className="w-full bg-white p-1.5 px-3 rounded-xl shadow-sm border border-stone-200 flex items-center justify-between">
+                        <button onClick={prevSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600 text-sm">← Prev</button>
+                        <span className="font-mono font-bold text-sm text-stone-700">
+                            {currentSolutionIndex + 1} / {solutions.length}
+                        </span>
+                        <button onClick={nextSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600 text-sm">Next →</button>
+                    </div>
+                )}
+
+                {/* Board */}
+                <div className="w-full bg-stone-800 p-2 sm:p-4 rounded-xl shadow-xl overflow-hidden">
+                    <Board
+                        puzzleType={puzzleType}
+                        solution={visualBoard || currentSolution}
+                        targetMonth={month}
+                        targetDay={day}
+                        targetWeekday={puzzleType === PuzzleType.TRIPLE ? weekday : null}
+                        onCellClick={handleCellClick}
+                        readOnly={isSolving}
+                    />
+                </div>
+
             </div>
-        )}
-
-        {/* Board */}
-        <div className="w-full bg-stone-800 p-2 sm:p-4 rounded-xl shadow-xl overflow-hidden">
-            <Board 
-                puzzleType={puzzleType}
-                solution={visualBoard || currentSolution} 
-                targetMonth={month} 
-                targetDay={day}
-                targetWeekday={puzzleType === PuzzleType.TRIPLE ? weekday : null}
-                onCellClick={handleCellClick}
-                readOnly={isSolving}
-            />
         </div>
-
-      </div>
-    </div>
-  );
+    );
 }
 
 export default App;
