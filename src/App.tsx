@@ -28,12 +28,14 @@ function App() {
 
     const [visualize, setVisualize] = useState(false);
     const [visualBoard, setVisualBoard] = useState<number[][] | null>(null);
+    const [liveSolutionCount, setLiveSolutionCount] = useState(0);
 
     const solverRef = useRef<Solver | null>(null);
 
     useEffect(() => {
         // Reset solutions when config changes
         setSolutions([]);
+        setLiveSolutionCount(0);
         setCurrentSolutionIndex(0);
         setVisualBoard(null);
     }, [month, day, weekday, puzzleType]);
@@ -50,13 +52,14 @@ function App() {
 
         setIsSolving(true);
         setSolutions([]);
+        setLiveSolutionCount(0);
         setVisualBoard(null);
 
         // Give UI a moment
         await new Promise(r => setTimeout(r, 50));
 
         try {
-            const solver = new Solver(puzzleType, month, day, weekday);
+            const solver = new Solver(puzzleType, month, day, weekday, true);
             solverRef.current = solver;
 
             if (visualize) {
@@ -64,32 +67,54 @@ function App() {
                 await solver.solveAsync((boardState) => {
                     // Deep copy to trigger re-render
                     setVisualBoard(boardState.map(row => [...row]));
-                }, 50, 1);
+                }, 50, 1, (count) => {
+                    setLiveSolutionCount(count);
+                });
 
                 // The visual solver stops after 1. To show ALL solutions to the user
                 // without making them wait 20mins, we now run a sync solve in the background
                 // to get the rest instantaneously.
                 if (solverRef.current) { // Check if not stopped
-                    const fullSolver = new Solver(puzzleType, month, day, weekday);
-                    fullSolver.solve(); // Finds all 24+ quickly (millis)
-                    const found = fullSolver.getSolutions();
+                    const fullSolver = new Solver(puzzleType, month, day, weekday, true);
+                    // Use new live solver for background search too, to keep UI responsive
+                    await fullSolver.solveLive((sol) => {
+                        setSolutions(prev => {
+                            // If this is the FIRST solution found overall (considering visual one)
+                            // Actually, visual one added 1. Now we add more.
+                            // But wait, visual solver found 1.
+                            // We should probably just start from scratch or append?
+                            // Logic was: Visual finds 1. Then we run FULL search to find ALL.
+                            // So we clear solutions again? Or distinct?
+                            // Let's stick to original logic: Visual finds 1 to show. Then we find ALL to list.
+                            return [...prev, sol];
+                        });
+                        setLiveSolutionCount(count => count + 1);
+                    }, 10000);
 
+                    const found = fullSolver.getSolutions();
                     if (found.length > 0) {
-                        const shuffled = shuffleArray(found);
-                        setSolutions(shuffled);
+                        // Dedup if needed, but we used a fresh solver instance so `found` is complete set
+                        // const shuffled = shuffleArray(found); // Solver is already randomizing search order
+                        setSolutions(found);
                         setVisualBoard(null);
-                        // Visual solver found the first one, fullSolver found all (ordered).
-                        // Index 0 matches the one just shown.
                         setCurrentSolutionIndex(0);
                     }
                 }
             } else {
-                // Standard mode
-                solver.solve(); // Explicit execution
-                const found = solver.getSolutions();
-                const shuffled = shuffleArray(found);
-                setSolutions(shuffled);
-                setCurrentSolutionIndex(0);
+                // Standard mode using non-blocking Live Solver
+                let isFirst = true;
+                await solver.solveLive((sol) => {
+                    setSolutions(prev => [...prev, sol]);
+                    setLiveSolutionCount(prev => prev + 1);
+
+                    if (isFirst) {
+                        isFirst = false;
+                        // On first solution, show it immediately!
+                        // Setting solutions state triggers re-render, 
+                        // and since index is 0, it will display this first solution.
+                        setCurrentSolutionIndex(0);
+                    }
+                }, 10000);
             }
 
         } catch (e) {
@@ -139,13 +164,13 @@ function App() {
                     onSolve={handleSolve}
                     onStop={handleStop}
                     solving={isSolving}
-                    solutionCount={solutions.length}
+                    solutionCount={isSolving ? liveSolutionCount : solutions.length}
                     visualize={visualize}
                     setVisualize={setVisualize}
                 />
 
                 {/* Solution Navigation */}
-                {solutions.length > 0 && !isSolving && (
+                {solutions.length > 0 && (
                     <div className="w-full bg-white p-1.5 px-3 rounded-xl shadow-sm border border-stone-200 flex items-center justify-between">
                         <button onClick={prevSolution} className="p-1 px-3 hover:bg-stone-50 rounded text-stone-600 text-sm">← Prev</button>
                         <span className="font-mono font-bold text-sm text-stone-700">

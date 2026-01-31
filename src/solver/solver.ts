@@ -1,6 +1,15 @@
 import { PuzzleType, getLayout, getMonthCell, getDayCell, getWeekdayCell } from './types.ts';
 import { getPieces } from './pieces.ts';
 
+function shufflePieces<T>(array: T[]): T[] {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
+}
+
 // Board representation: number[][]
 // -1: Wall/Invalid
 // 0: Empty
@@ -16,9 +25,12 @@ export class Solver {
     private cols: number;
     private pieces: any[]; // Piece[]
 
-    constructor(type: PuzzleType, month: number, day: number, weekday: number | null) {
+    constructor(type: PuzzleType, month: number, day: number, weekday: number | null, randomize: boolean = false) {
         const layout = getLayout(type);
         this.pieces = getPieces(type);
+        if (randomize) {
+            this.pieces = shufflePieces(this.pieces);
+        }
         this.rows = layout.length;
         this.cols = layout[0].length;
 
@@ -143,13 +155,13 @@ export class Solver {
 
 
 
-    // piecesAvailable: Set of indices
-    public solve(limit: number = 10000): void {
-        const allPieces = new Set(this.pieces.map(p => p.id));
-        this.solveFlexible(allPieces, limit);
+    // piecesAvailable: Set of indices (use index because we might shuffle this.pieces)
+    public solve(limit: number = 10000, onSolutionFound?: (count: number) => void): void {
+        const allPieces = new Set(this.pieces.map((_, i) => i));
+        this.solveFlexible(allPieces, limit, onSolutionFound);
     }
 
-    private solveFlexible(piecesAvailable: Set<number>, limit: number): void {
+    private solveFlexible(piecesAvailable: Set<number>, limit: number, onSolutionFound?: (count: number) => void): void {
         if (this.stopped) return;
         if (this.solutions.length >= limit) return;
 
@@ -157,6 +169,7 @@ export class Solver {
         if (!spot) {
             // Success
             this.solutions.push(this.board.map(row => [...row]));
+            if (onSolutionFound) onSolutionFound(this.solutions.length);
             return;
         }
 
@@ -188,7 +201,7 @@ export class Solver {
                                 const nextAvailable = new Set(piecesAvailable);
                                 nextAvailable.delete(pIdx);
 
-                                this.solveFlexible(nextAvailable, limit);
+                                this.solveFlexible(nextAvailable, limit, onSolutionFound);
 
                                 this.remove(shape, originR, originC);
 
@@ -206,20 +219,97 @@ export class Solver {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    private stepChecker = 0;
+
+    public async solveLive(onFound: (solution: number[][]) => void, limit: number = 10000): Promise<void> {
+        const allPieces = new Set(this.pieces.map((_, i) => i));
+        this.stepChecker = 0;
+        await this.solveFlexibleLive(allPieces, limit, onFound);
+    }
+
+    private async solveFlexibleLive(
+        piecesAvailable: Set<number>,
+        limit: number,
+        onFound: (solution: number[][]) => void
+    ): Promise<void> {
+        if (this.stopped) return;
+        if (this.solutions.length >= limit) return;
+
+        // Yield periodically to keep UI responsive
+        // Increase step count significantly to speed up solving
+        this.stepChecker++;
+        if (this.stepChecker > 2000) {
+            this.stepChecker = 0;
+            // Use setImmediate if available or very short timeout
+            await new Promise(r => setTimeout(r, 0));
+        }
+
+        const spot = this.findEmptySpot();
+        if (!spot) {
+            // Success
+            const sol = this.board.map(row => [...row]);
+            this.solutions.push(sol);
+            onFound(sol);
+            // Yield on solution to ensure it renders
+            await new Promise(r => setTimeout(r, 0));
+            return;
+        }
+
+        const { r, c } = spot;
+
+        if (this.isPruned()) return;
+
+        for (const pIdx of piecesAvailable) {
+            if (this.stopped) return;
+            const piece = this.pieces[pIdx];
+
+            for (const shape of piece.shapes) {
+                const H = shape.length;
+                const W = shape[0].length;
+
+                for (let ir = 0; ir < H; ir++) {
+                    for (let ic = 0; ic < W; ic++) {
+                        if (shape[ir][ic] === 1) {
+                            const originR = r - ir;
+                            const originC = c - ic;
+
+                            if (originR < 0 || originC < 0) continue;
+
+                            if (this.canPlace(shape, originR, originC)) {
+                                this.place(shape, originR, originC, piece.id + 1);
+
+                                const nextAvailable = new Set(piecesAvailable);
+                                nextAvailable.delete(pIdx);
+
+                                await this.solveFlexibleLive(nextAvailable, limit, onFound);
+
+                                this.remove(shape, originR, originC);
+
+                                if (this.solutions.length >= limit) return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public async solveAsync(
         onUpdate: (board: number[][]) => void,
         delayMs: number = 20,
-        limit: number = 10000
+        limit: number = 10000,
+        onSolutionFound?: (count: number) => void
     ): Promise<void> {
-        const allPieces = new Set(this.pieces.map(p => p.id));
-        await this.solveFlexibleAsync(allPieces, onUpdate, delayMs, limit);
+        const allPieces = new Set(this.pieces.map((_, i) => i));
+        await this.solveFlexibleAsync(allPieces, onUpdate, delayMs, limit, onSolutionFound);
     }
 
     private async solveFlexibleAsync(
         piecesAvailable: Set<number>,
         onUpdate: (board: number[][]) => void,
         delayMs: number,
-        limit: number
+        limit: number,
+        onSolutionFound?: (count: number) => void
     ): Promise<boolean> {
         if (this.stopped) return false;
         if (this.solutions.length >= limit) return true;
@@ -227,6 +317,7 @@ export class Solver {
         const spot = this.findEmptySpot();
         if (!spot) {
             this.solutions.push(this.board.map(row => [...row]));
+            if (onSolutionFound) onSolutionFound(this.solutions.length);
             onUpdate(this.board);
             await this.delay(delayMs * 10); // Pause briefly on solution
             return false; // Return false to continue searching for more solutions
@@ -260,7 +351,7 @@ export class Solver {
                                 const nextAvailable = new Set(piecesAvailable);
                                 nextAvailable.delete(pIdx);
 
-                                const finished = await this.solveFlexibleAsync(nextAvailable, onUpdate, delayMs, limit);
+                                const finished = await this.solveFlexibleAsync(nextAvailable, onUpdate, delayMs, limit, onSolutionFound);
                                 if (finished) return true;
 
                                 this.remove(shape, originR, originC);
