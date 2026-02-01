@@ -5,16 +5,6 @@ import { PuzzleSelector } from './components/PuzzleSelector';
 import { Solver, Solution } from './solver/solver';
 import { PuzzleType } from './solver/types';
 
-function shuffleArray<T>(array: T[]): T[] {
-    const newArray = [...array];
-    for (let i = newArray.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-    }
-    return newArray;
-}
-
-
 function App() {
     const [month, setMonth] = useState<number>(new Date().getMonth());
     const [day, setDay] = useState<number>(new Date().getDate());
